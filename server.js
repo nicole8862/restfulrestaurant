@@ -9,6 +9,52 @@ app.use(bodyParser.json());
 var MONGODBURL = 'mongodb://smegkim:Ss_123456@ds054298.mongolab.com:54298/mongodbjgy/test'
 var mongoose = require('mongoose');
 
+function findCriteria(array){
+	var criteria = {};
+	var pair = {};	
+	for(var i=0;i<array.length;i=i+2){
+			if(array[i]=="date"||array[i]=="grade"||array[i]=="score"){
+				pair[array[i]] = array[i+1];
+				criteria['grades'] = {$elemMatch:pair};		
+			}else if(array[i]=="street"||array[i]=="zipcode"||array[i]=="building"){
+				criteria["address."+array[i]] = array[i+1];
+			}else if(array[i]=="lon"||array[i]=="lat"){
+				if(array[i]=="lon"){
+					criteria['address.coord.0'] = array[i+1];
+				}else{
+					criteria['address.coord.1'] = array[i+1];
+				}
+			}else{
+				criteria[array[i]] = array[i+1];		
+			}		
+		}
+	return criteria;
+}
+
+function updateCriteria(array){
+	var criteria = {};
+	var pair = {};	
+	for(var i=0;i<array.length;i=i+2){
+			if(array[i]=="date"||array[i]=="grade"||array[i]=="score"){
+				//pair[array[i]] = array[i+1];
+				//criteria['grades.0'] = {$set:pair};	
+				criteria['grades.0.'+array[i]]=array[i+1];		
+			}else if(array[i]=="street"||array[i]=="zipcode"||array[i]=="building"){
+				criteria["address."+array[i]] = array[i+1];
+			}else if(array[i]=="lon"||array[i]=="lat"){
+				if(array[i]=="lon"){
+					criteria['address.coord.0'] = array[i+1];
+				}else{
+					criteria['address.coord.1'] = array[i+1];
+				}
+			}else{
+				criteria[array[i]] = array[i+1];		
+			}		
+		}
+	return criteria;
+}
+
+
 app.post('/',function(req,res) {
 	//console.log(req.body);
 	var restaurantSchema = require('./models/restaurant');
@@ -24,6 +70,7 @@ app.post('/',function(req,res) {
 		rObj.address.coord = [];
 		rObj.address.coord.push(req.body.lon);
 		rObj.address.coord.push(req.body.lat);
+
 		rObj.borough = req.body.borough;
 		rObj.cuisine = req.body.cuisine;
 		rObj.name = req.body.name;
@@ -33,7 +80,7 @@ app.post('/',function(req,res) {
 		//rObj.grades.push({'date':req.body.date[i],'grade':req.body.grade[i],'score':req.body.score[i]});
 		
 //curl -X POST localhost:8099 --data "name=xxx&building=xxx&street=xxx&zipcode=xxx&lon=100&lat=100&borough=xxx&cuisine=xxx&restaurant_id=x&date=1&grade=2&score=3&restaurant_id=x&date=11&grade=12&score=13"
-
+if(req.body.date&&req.body.grade&&req.body.score){
 		if ((req.body.date.length==req.body.grade.length)&&(req.body.grade.length==req.body.score.length)&&req.body.grade.length>1) {
 			for(var i=0; i< req.body.date.length; i++){
 				var date = req.body.date[i];
@@ -49,14 +96,14 @@ app.post('/',function(req,res) {
 		else{
 			rObj.grades=[];		
 		}
-
+}
 		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
 		var r = new Restaurant(rObj);
 		//console.log(r);
 		r.save(function(err) {
        		if (err) {
 				res.status(500).json(err);
-				//throw err;
+				throw err;
 			}
        		//console.log('Restaurant created!')
        		db.close();
@@ -65,29 +112,40 @@ app.post('/',function(req,res) {
     });
 });
 
-app.delete('/:field/:value',function(req,res) {
-	var criteria = {};
-	criteria[req.params.field] = req.params.value;
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.find(criteria).remove(function(err) {
-       		if (err) {
-				res.status(500).json(err);
-				//throw err
-			}
-       		//console.log('Restaurant removed!')
-       		db.close();
-			res.status(200).json({message: 'delete done'});
-    	});
-    });
+app.delete('/restaurant/*',function(req,res) {
+	var path = req.path.trim();
+	if(path.lastIndexOf('/')==req.path.length-1){		
+		path = path.slice(12,req.path.length-1);
+	}else{
+		path = path.slice(12,req.path.length);
+	}
+	var array = path.split('/');
+	
+	if(array.length%2!=0){
+		res.status(200).json({message: 'Number of fields do not match number of values '});
+	}else{	
+		var criteria = findCriteria(array);
+		var restaurantSchema = require('./models/restaurant');
+		mongoose.connect(MONGODBURL);
+		var db = mongoose.connection;
+		db.on('error', console.error.bind(console, 'connection error:'));
+		db.once('open', function (callback) {
+			var Restaurant = mongoose.model('Restaurant', restaurantSchema);
+			Restaurant.find(criteria).remove(function(err) {
+	       		if (err) {
+					res.status(500).json(err);
+					//throw err
+				}
+	       		//console.log('Restaurant removed!')
+	       		db.close();
+				res.status(200).json({message: 'delete done'});
+	    		});
+	    	});//end of db open
+	}//end of else
 });
 
 //request all docs
-app.get('/', function(req,res) {
+app.get('/restaurant', function(req,res) {
 	var restaurantSchema = require('./models/restaurant');
 	mongoose.connect(MONGODBURL);
 	var db = mongoose.connection;
@@ -110,236 +168,97 @@ app.get('/', function(req,res) {
     });
 });
 
-app.get('/:field/:value', function(req,res) {
-	var criteria = {};
-	criteria[req.params.field] = req.params.value;	
-	//criteria["field"]="value";
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.find(criteria,function(err,results){
-       			if (err) {
-				res.status(500).json(err);
-				//throw err;
-			}
-			if (results.length > 0) {
-				res.status(200).json(results);
-			}
-			else {	
-				res.status(200).json({message: 'No matching document'});
-			}
-			db.close();
-    	});
-    });
+//request docs with criteria
+app.get('/restaurant/*', function(req,res) {
+	var path = req.path.trim();
+	if(path.lastIndexOf('/')==req.path.length-1){		
+		path = path.slice(12,req.path.length-1);
+	}else{
+		path = path.slice(12,req.path.length);
+	}
+	var array = path.split('/');
+	
+	if(array.length%2!=0){
+		res.status(200).json({message: 'Number of fields do not match number of values '});
+	}else{
+		var criteria = findCriteria(array);
+		console.log(criteria);
+		var restaurantSchema = require('./models/restaurant');
+		mongoose.connect(MONGODBURL);
+		var db = mongoose.connection;
+		db.on('error', console.error.bind(console, 'connection error:'));
+		db.once('open', function (callback) {
+			var Restaurant = mongoose.model('Restaurant', restaurantSchema);
+			Restaurant.find(criteria,function(err,results){
+	       			if (err) {
+					res.status(500).json(err);
+					//throw err;
+				}
+				if (results.length > 0) {
+					res.status(200).json(results);
+				}
+				else {	
+					res.status(200).json({message: 'No matching document'});
+				}
+				db.close();
+	    		});
+	    	});//end of db open
+	}//end of else
 });
 
-//2 criteria
-app.get('/:field1/:value1/:field2/:value2', function(req,res) {
-	var criteria = {};
-	criteria[req.params.field1] = req.params.value1;
-	criteria[req.params.field2] = req.params.value2;	
-	//criteria["field"]="value";
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.find(criteria,function(err,results){
-       			if (err) {
-				res.status(500).json(err);
-				//throw err;
-			}
-			if (results.length > 0) {
-				res.status(200).json(results);
-			}
-			else {	
-				res.status(200).json({message: 'No matching document'});
-			}
-			db.close();
-    	});
-    });
+
+//update any information of any restaurants
+//body specifing update informations
+//path collecting target requirement
+app.put('/criteria/*', function(req,res) {
+	//handling path
+	var path = req.path.trim();
+	if(path.lastIndexOf('/')==req.path.length-1){		
+		path = path.slice(10,req.path.length-1);
+	}else{
+		path = path.slice(10,req.path.length);
+	}
+	var array_path = path.split('/');	
+
+	//handling body
+	var raw_request_body = JSON.stringify(req.body);
+	var request_body = raw_request_body.slice(1,raw_request_body.length-1).split('\"').join('');
+	var array_body = request_body.split(/\,|\:/);
+	
+	
+	if(array_body.length%2!=0&&array_path.length%2!=0){
+		res.status(200).json({message: 'Number of fields do not match number of values '});
+	}else{	
+		var target_criteria = findCriteria(array_path);
+		var update_info = updateCriteria(array_body);
+		console.log(update_info);
+		var restaurantSchema = require('./models/restaurant');
+		mongoose.connect(MONGODBURL);
+		var db = mongoose.connection;
+		db.on('error', console.error.bind(console, 'connection error:'));
+		db.once('open', function (callback) {
+			var Restaurant = mongoose.model('Restaurant', restaurantSchema);
+			Restaurant.update(target_criteria,{$set:update_info},function(err,results){
+	       			if (err) {
+					res.status(500).json(err);
+					//throw err;
+				}
+				else {	
+					res.status(200).json({message: 'update done'});
+				}
+				db.close();
+	    		});
+	    	});//end of db open
+	}//end of else
 });
 
-app.get('/address/:field/:value', function(req,res) {
-	var criteria = {};
-	
-	criteria["address."+req.params.field] = req.params.value;
-	
-	//criteria["field"]="value";
-	console.log(criteria);
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.find(criteria,function(err,results){
-       		if (err) {
-				res.status(500).json(err);
-				//throw err;
-			}
-			if (results.length > 0) {
-				res.status(200).json(results);
-			}
-			else {	
-				res.status(200).json({message: 'No matching document'});
-			}
-			db.close();
-    	});
-    });
-});
-
-app.get('/address/coord/:x/:y', function(req,res) {
-	var x = Number(req.params.x);
-	var y = Number(req.params.y);
-	var coordArray = [x,y];
-	var criteria = {};
-	criteria["address.coord"] = coordArray;
-
-	//criteria["field"]="value";
-	console.log(criteria);
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.find(criteria,function(err,results){
-       		if (err) {
-				res.status(500).json(err);
-				//throw err;
-			}
-			if (results.length > 0) {
-				res.status(200).json(results);
-			}
-			else {	
-				res.status(200).json({message: 'No matching document'});
-			}
-			db.close();
-    	});
-    });
-});
-
-app.get('/grades/:field/:value', function(req,res) {
-	var criteria = {};
-	var gradeObj = {};
-	gradeObj[req.params.field]=req.params.value;
-	criteria["grades"] = {$elemMatch: gradeObj};
-
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.find(criteria,function(err,results){
-       		if (err) {
-				res.status(500).json(err);
-				//throw err;
-			}
-			if (results.length > 0) {
-				res.status(200).json(results);
-			}
-			else {	
-				res.status(200).json({message: 'No matching document',});
-			}
-			db.close();
-    	});
-    });
-});
-
-app.put('/:restaurant_id/:field/:value', function(req,res) {
-	
-	var criteria = {};	
-	criteria[req.params.field] = req.params.value;
-	
-	
-	//criteria["field"]="value";
-	console.log(criteria);
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.update({restaurant_id:req.params.restaurant_id},{$set:criteria},function(err,results){
-       			if (err) {
-				res.status(500).json(err);
-				//throw err;
-			}
-			else {	
-				res.status(200).json({message: 'update done'});
-			}
-			db.close();
-    		});
-    });
-});
-
-app.put('/:restaurant_id/address/:field/:value', function(req,res) {
-	var criteria = {};
-	
-	criteria[req.params.field] = req.params.value;
-	
-	
-	//criteria["field"]="value";
-	console.log(criteria);
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.update({restaurant_id:req.params.restaurant_id},{$set:{address:criteria}},function(err,results){
-       			if (err) {
-				res.status(500).json(err);
-				//throw err;
-			}
-			else {	
-				res.status(200).json({message: 'update done'});
-			}
-			db.close();
-    	});
-    });
-});
-
-app.put('/:restaurant_id/address/coord/:x/:y', function(req,res) {
-	var criteria = {};
-	var x = Number(req.params.x);
-	var y = Number(req.params.y);
-	var coordArray = [x,y];
-	criteria["address.coord"] = coordArray;
-	
-	//criteria["field"]="value";
-	console.log(criteria);
-	var restaurantSchema = require('./models/restaurant');
-	mongoose.connect(MONGODBURL);
-	var db = mongoose.connection;
-	db.on('error', console.error.bind(console, 'connection error:'));
-	db.once('open', function (callback) {
-		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
-		Restaurant.update({restaurant_id:req.params.restaurant_id},{$set:criteria},function(err,results){
-       			if (err) {
-				res.status(500).json(err);
-				//throw err;
-			}
-			else {	
-				res.status(200).json({message: 'update done'});
-			}
-			db.close();
-    	});
-    });
-});
 
 //push a grade to a restaurant
-app.put('/:restaurant_id/:date/:grade/:score', function(req,res) {
+app.put('/:restaurant_id/grade', function(req,res) {
 	var gradeObj = {};
-	gradeObj["date"]=req.params.date;
-	gradeObj["grade"]=req.params.grade;
-	gradeObj["score"]=req.params.score;
+	gradeObj["date"]=req.body.date;
+	gradeObj["grade"]=req.body.grade;
+	gradeObj["score"]=req.body.score;
 	var restaurantSchema = require('./models/restaurant');
 	mongoose.connect(MONGODBURL);
 	var db = mongoose.connection;
