@@ -107,7 +107,7 @@ if(req.body.date&&req.body.grade&&req.body.score){
 			}
        		//console.log('Restaurant created!')
        		db.close();
-			res.status(200).json({message: 'insert done', restaurant_id: r.restaurant_id});
+			res.status(200).json({message: 'insert done', _id: r._id});
     	});
     });
 });
