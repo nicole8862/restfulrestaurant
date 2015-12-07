@@ -63,20 +63,31 @@ app.post('/',function(req,res) {
 	db.on('error', console.error.bind(console, 'connection error:'));
 	db.once('open', function (callback) {
 		var rObj = {};
-		rObj.address = {};
-		rObj.address.building = req.body.building;
-		rObj.address.street = req.body.street;
-		rObj.address.zipcode = req.body.zipcode;
-		rObj.address.coord = [];
-		rObj.address.coord.push(req.body.lon);
-		rObj.address.coord.push(req.body.lat);
-
-		rObj.borough = req.body.borough;
-		rObj.cuisine = req.body.cuisine;
-		rObj.name = req.body.name;
-		rObj.restaurant_id = req.body.restaurant_id;
+		if(req.body.building||req.body.street||req.body.zipcode){
+			rObj.address = {};
+			if(req.body.building)
+			rObj.address.building = req.body.building;
+			if(req.body.street)
+			rObj.address.street = req.body.street;
+			if(req.body.zipcode)
+			rObj.address.zipcode = req.body.zipcode;
+		}
+		if(req.body.lon||req.body.lat){
+			rObj.address.coord = [];
+			rObj.address.coord.push(req.body.lon);
+			rObj.address.coord.push(req.body.lat);
+		}
+		if(req.body.borough)
+			rObj.borough = req.body.borough;
+		if(req.body.cuisine)
+			rObj.cuisine = req.body.cuisine;
+		if(req.body.name)
+			rObj.name = req.body.name;
+		if(req.body.restaurant_id)
+			rObj.restaurant_id = req.body.restaurant_id;
 		//ADD GRADES
-		rObj.grades=[];
+		if(req.body.date||req.body.grade||req.body.score)
+			rObj.grades=[];
 		//rObj.grades.push({'date':req.body.date[i],'grade':req.body.grade[i],'score':req.body.score[i]});
 		
 //curl -X POST localhost:8099 --data "name=xxx&building=xxx&street=xxx&zipcode=xxx&lon=100&lat=100&borough=xxx&cuisine=xxx&restaurant_id=x&date=1&grade=2&score=3&restaurant_id=x&date=11&grade=12&score=13"
@@ -97,6 +108,7 @@ if(req.body.date&&req.body.grade&&req.body.score){
 			rObj.grades=[];		
 		}
 }
+		console.log(rObj);
 		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
 		var r = new Restaurant(rObj);
 		//console.log(r);
@@ -295,7 +307,11 @@ app.delete('/:restaurant_id/:date/:grade/:score',function(req,res) {
 				res.status(500).json(err);
 				//throw err;
 			}
+			if(results.nModified!=1){
+				res.status(200).json({message: 'no targeted obj'});
+			}
 			else {	
+				console.log(results);
 				res.status(200).json({message: 'update done'});
 			}
 			db.close();
