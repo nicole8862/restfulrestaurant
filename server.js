@@ -278,4 +278,29 @@ app.put('/:restaurant_id/grade', function(req,res) {
     });
 });
 
+
+app.delete('/:restaurant_id/:date/:grade/:score',function(req,res) {
+	var gradeObj = {};
+	gradeObj["date"]=req.params.date;
+	gradeObj["grade"]=req.params.grade;
+	gradeObj["score"]=req.params.score;
+	var restaurantSchema = require('./models/restaurant');
+	mongoose.connect(MONGODBURL);
+	var db = mongoose.connection;
+	db.on('error', console.error.bind(console, 'connection error:'));
+	db.once('open', function (callback) {
+		var Restaurant = mongoose.model('Restaurant', restaurantSchema);
+		Restaurant.update({restaurant_id:req.params.restaurant_id},{$pull: {grades: gradeObj}},function(err,results){
+       			if (err) {
+				res.status(500).json(err);
+				//throw err;
+			}
+			else {	
+				res.status(200).json({message: 'update done'});
+			}
+			db.close();
+    		});
+    });
+});
+
 app.listen(process.env.PORT || 8099);
